@@ -173,6 +173,9 @@ h1,h2,h3{margin:0;text-wrap:balance}
 .mt time{font-weight:700;font-variant-numeric:tabular-nums;color:var(--maple);line-height:1.3}
 .mt time small{display:block;font-size:.78rem;color:var(--muted);font-weight:500}
 .meal{display:flex;flex-wrap:wrap;gap:6px}
+.sec .guide{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.guide li{padding:8px 12px;background:var(--bg);border-radius:10px;font-size:.92rem;line-height:1.55}
+.guide small{color:var(--muted);font-size:.8rem}
 .linkbtn{font:inherit;font-weight:700;color:var(--maple);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline}
 .sec .lc{list-style:none;margin:0;padding:0;display:grid;gap:4px}
 .lc li{display:flex;justify-content:space-between;gap:10px;padding:6px 10px;background:var(--bg);border-radius:8px;font-size:.9rem}
@@ -301,7 +304,7 @@ const BOOTHS = [
       prep:['수어 도서 영상 재생 장비(모니터·음향) 세팅','방문객 대화 · 관람 동선 확보'],
       staffHow:['수어 도서 영상을 보도록 안내해요.','수어·농문화 질문에 친절히 답하고, 간단한 수어를 보여 줘요.','영상 관람과 질의응답을 마치면 스탬프 1개를 찍어 줘요.'],
       items:['테이블 1','의자 5','노트북 1','수어도서 및 관련자료','아크릴 책꽂이','모니터 1','스피커 (음향) 1','멀티탭 1','생수 3개'], power:'전기 필요',
-      staff:['손경애'], roles:{'손경애':'자원봉사 담당'}, vols:['김민정','김선정'], note:'지원(김민정 · 김선정)은 공연팀 대기실 지원도 함께 맡아요.' },
+      staff:['손경애'], vols:['김민정','김선정'], note:'지원(김민정 · 김선정)은 공연팀 대기실 지원도 함께 맡아요.' },
     { title:'가치봄 영화축제 홍보', what:'가치봄 영화 설명, 동의 서명 받기',
       prep:['가치봄 영화 홍보 리플렛, 동의 서명지, 펜 세팅','기념품 수량 점검, 스탬프 세팅'],
       staffHow:['가치봄 영화(화면해설·한글자막)와 영화축제를 안내해요.','가치봄영화축제 지지 동의 서명을 받아요.','서명을 확인하면 기념품을 주고 스탬프 1개를 찍어 줘요.'],
@@ -454,7 +457,7 @@ function howHtml(s){
 const OVERVIEW = [
   { s:'09:00', k:'준비', c:'prep', h:'행사장 집결 · 부스 세팅', tasks:[['현수막 설치, 테이블 · 의자 · 물품 세팅','STAFF']] },
   { s:'09:30', k:'준비', c:'prep', h:'자원봉사자 픽업', tasks:[['춘천역에서 자원봉사자 10명 픽업','PICKUP']] },
-  { s:'10:00', k:'준비', c:'prep', h:'자원봉사자 도착 · 업무 설명', tasks:[['도착 관리, 업무 설명','KIMYS'],['출석 확인 후 맡은 부스로 이동','VOL']] },
+  { s:'10:00', k:'준비', c:'prep', h:'자원봉사자 도착 · 업무 설명', tasks:[['자원봉사자 도착 확인, 자원봉사 시간 기록지 서명 받기, 업무 설명','KIMYS'],['총괄본부 부스에 가서 도착했음을 확인하고 자원봉사 시간 기록지에 서명하기 → 맡은 부스로 이동','VOL']] },
   { s:'10:30', e:'10:50', k:'준비', c:'prep', h:'공연팀 리허설 (8팀)', tasks:[['리허설 진행','LEE']] },
   { s:'11:00', e:'12:00', k:'공연', c:'', h:'개회 · 축하 영상 · 수어공연 3팀', teams:[['1','아기돼지 삼형제','온남매(춘천)'],['2','별빛 같은 나의 사랑아','두 손이 언어가 되다(횡성)'],['3','작은 손짓, 큰 시작','김지현(속초)']],
     tasks:[['부스 운영 시작','ALL'],['부스별 간식 배부 · 물품 배부','GOODS'],['무대 대기','STAGE'],['환경미화','CLEAN'],['공연팀 대기실 지원','WAIT']] },
@@ -466,7 +469,8 @@ const OVERVIEW = [
   { s:'14:30', e:'15:30', k:'영화', c:'film', h:'가치봄 영화 2편', p:'14:30 〈봄의 언어〉 · 15:00 〈내 귀가 되어줘〉' },
   { s:'15:30', e:'16:00', k:'공연', c:'', h:'수어공연 2팀', teams:[['6','역사의 몸짓(진검 무예)','장현미·한명화(강릉)'],['7','풍선','T=I(춘천)']],
     tasks:[['공연팀 대기실 지원','WAIT']] },
-  { s:'16:00', k:'마무리', c:'end', h:'폐회 · 철수', tasks:[['부스 물품 정리 · 반납, 쓰레기 정리','ALL'],['물품 철수','MOVEOUT']] }
+  { s:'16:00', k:'마무리', c:'end', h:'폐회 · 철수', tasks:[['부스 물품 정리 · 반납, 쓰레기 정리','ALL'],['물품 철수','MOVEOUT']] },
+  { s:'17:00', k:'마무리', c:'end', h:'정리 완료 · 자원봉사 시간 서명', tasks:[['자원봉사자들에게 자원봉사 시간 기록지 서명 받기','KIMYS'],['모든 정리가 끝나면 총괄본부 부스에서 자원봉사 시간 기록지에 서명하기','VOL']] }
 ];
 function renderHome(){
   const q = $('q').value.trim();
@@ -514,8 +518,14 @@ function renderMe(){
     const job = mine ? '<ul class="job">' + li(mine) + '</ul>'
       : '<p class="job1">' + esc(p.role || s.what) + '</p>';
     const m = meal(p), yn = (k, on, t1, t0) => '<span class="mp' + (on ? ' on' : '') + '"><b>' + k + '</b>' + (on ? t1 : t0) + '</span>';
-    const mealHtml = '<div class="sec"><h3>식사 · 차량</h3><div class="meal">' + yn('중식', m.lunch, '먹어요', '없음') + (m.dinner !== null ? yn('석식', m.dinner, '참가', '불참') : '')
-      + (m.car !== null ? yn('차량', m.car, '이용', '이용 안 함') : '') + '</div></div>';
+    const CARNO = ' <small>(차량 번호는 다음 주에 안내)</small>';
+    const guide = [];
+    if (m.car) guide.push('🚐 <b>아침</b> 9:30에 춘천역에서 차량으로 출발해요.' + CARNO);
+    if (m.dinner === true) guide.push('🍽️ 행사 후 <b>저녁 식사에 함께해요.</b>');
+    if (m.dinner === false) guide.push('🍽️ 행사 후 저녁 식사는 하지 않아요.');
+    if (m.car && m.dinner) guide.push('🚐 <b>행사 후</b> 저녁 식사를 마치고 <b>원태연 선생님 차량</b>으로 춘천역까지 이동해요.' + CARNO);
+    if (m.car && !m.dinner) guide.push('🚐 <b>행사 후</b> <b>한주례 선생님 차량</b>으로 춘천역까지 이동해요.' + CARNO);
+    const mealHtml = p.type === '지원' && guide.length ? '<div class="sec"><h3>식사 · 이동 안내</h3><ul class="guide">' + guide.map(g => '<li>' + g + '</li>').join('') + '</ul></div>' : '';
     const chips = a => '<div class="mates">' + a.map(n => '<button type="button" class="pill" data-n="' + esc(n) + '">' + esc(n) + '</button>').join('') + '</div>';
     const carHtml = p.name === '원태연' ? '<div class="sec"><h3>차량 이용 자원봉사자 (' + ridersAll.length + '명)</h3>'
         + '<p class="hint" style="margin:4px 0">석식 후 내가 배웅 (' + rideEat.length + '명)</p>' + chips(rideEat)
