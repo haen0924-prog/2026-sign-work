@@ -427,7 +427,7 @@ function lunchCounts(){
   [['사회자', 2], ['특별공연 (김우경)', 1], ['이상용 협회장', 1], ['영상 · 음향 (플레이협동조합)', 3], ['수어통역', 2]].forEach(([k, n]) => cnt.push([99, k, n]));
   return cnt.filter(x => x[2]);
 }
-const COMMON_ITEMS = ['쉬는 시간 안내판 (탁상용 달력 활용해 제작) 15개','스탬프 15개 (18개 있음)','스탬프 잉크','현수막 고정용 끈 (케이블타이)','전선릴'];
+const COMMON_ITEMS = ['사회자 · 통역사용 책상 2개 (도협회 접이식)','사회자 · 통역사용 의자 3개','쉬는 시간 안내판 (탁상용 달력 활용해 제작) 15개','스탬프 15개 (18개 있음)','스탬프 잉크','현수막 고정용 끈 (케이블타이)','전선릴'];
 // 시간표: 시간마다 "할 일"과 "맡은 사람"만. who = 이름 배열 | 'ALL'(모든 부스 담당자) | 'HQ' 등 그룹 키
 const GROUPS = {
   STAFF:   { label:'담당 전체', names:null, type:'담당' },
@@ -463,8 +463,30 @@ function mates(s, self){
   if (s.who) h += '<span class="pill">' + esc(s.who) + ' · 담당</span>';
   return h || '<span class="pill ghost">배정 필요</span>';
 }
+// ===== 구글 시트 [물품 체크] 탭 연결 (앱스 스크립트 웹 앱) =====
+const SHEET_API = '';   // ← 앱스 스크립트 배포 후 받은 웹 앱 주소 (https://script.google.com/macros/s/.../exec)
+let SHEET = null, SHEET_FAIL = false, sheetBusy = false;
+const itemLabel = x => x.name + (x.qty ? ' ' + x.qty + (x.unit || '') : '');
+async function loadSheet(redraw){
+  if (!SHEET_API || sheetBusy) return; sheetBusy = true;
+  try {
+    const r = await fetch(SHEET_API + '?action=list&t=' + Date.now()); const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    SHEET = { items: d.items, when: new Date() }; SHEET_FAIL = false;
+  } catch (_) { SHEET_FAIL = true; }
+  sheetBusy = false;
+  if (!redraw) return;
+  if (cur === 'items') renderItems();
+  else if (cur === 'map') renderMap();
+  else if (cur === 'me' && !document.querySelector('.memo-pane:not([hidden])')) renderMe();
+}
+function subItems(s){   // 시트가 연결되면 시트 목록, 아니면 앱에 들어 있는 목록
+  if (!SHEET) return s.items;
+  return SHEET.items.filter(x => x.sub === s.title && x.status !== '필요 없음').map(itemLabel);
+}
 function itemsHtml(s){
-  return (s.items.length ? '<div class="items">' + s.items.map(i=>'<span>'+esc(i)+'</span>').join('') + '</div>' : '<p class="hint">시트에 적힌 물품 없음</p>')
+  const its = subItems(s);
+  return (its.length ? '<div class="items">' + its.map(i=>'<span>'+esc(i)+'</span>').join('') + '</div>' : '<p class="hint">시트에 적힌 물품 없음</p>')
     + (s.power ? '<span class="power">⚡ ' + esc(s.power) + '</span>' : '')
     + (s.net ? ' <span class="power" style="color:#2f6f8f">📶 ' + esc(s.net) + '</span>' : '');
 }
@@ -678,23 +700,40 @@ function renderAll(){
 }
 
 // ===== 물품 체크 (이 휴대폰에만 저장) =====
+// 이름을 검색하면 내 부스 물품만 (총괄본부는 공통 물품도)
+let itemsAll = false;
+function itemsWho(){
+  const q = $('q').value.trim(); if (!q) return null;
+  const names = [...new Set(PEOPLE.filter(p => p.name.includes(q)).map(p => p.name))];
+  const me = names.length === 1 ? names[0] : names.includes(q) ? q : null;
+  if (!me) return { many: names };
+  const mine = PEOPLE.filter(p => p.name === me);
+  return { me, subs: new Set(mine.map(p => p.sub)), titles: new Set(mine.map(p => p.sub.title)), hq: mine.some(p => p.booth.no === 1) };
+}
+function whoBar(w){
+  if (!w) return '<p class="hint">💡 위 검색창에 이름을 넣으면 내 부스 물품만 볼 수 있어요.</p>';
+  if (!w.me) return '<p class="hint">' + (w.many.length ? '이름이 여러 명과 겹쳐요. 이름을 끝까지 입력해 주세요.' : '"' + esc($('q').value.trim()) + '" 이름을 찾지 못했어요. 전체 물품을 보여 줘요.') + '</p>';
+  return '<p class="note" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;justify-content:space-between">' + '<span>' + (itemsAll ? '📋 전체 물품을 보고 있어요' : '🙋 <b>' + esc(w.me) + '</b>님 부스 물품만 보고 있어요') + '</span>' + '<button type="button" class="btn" id="itemsAll">' + (itemsAll ? esc(w.me) + '님 물품만 보기' : '전체 보기') + '</button></p>';
+}
 function renderItems(){
+  if (SHEET) return renderSheetItems();
+  const w = itemsWho(), only = w && w.me && !itemsAll;
   const st = ls.get('gw-assign-items') || {};
   let total = 0, done = 0;
   const blocks = BOOTHS.filter(b => b.subs.some(s => s.items.length)).map(b => {
-    const rows = b.subs.flatMap(s => s.items.map((it,i) => { const k = b.no + '|' + s.title + '|' + i; total++; if (st[k]) done++;
+    const rows = b.subs.filter(s => !only || w.subs.has(s)).flatMap(s => s.items.map((it,i) => { const k = b.no + '|' + s.title + '|' + i; total++; if (st[k]) done++;
       return '<li><label><input type="checkbox" data-k="' + esc(k) + '"' + (st[k]?' checked':'') + '><span>' + esc(it) + (b.subs.length>1 ? ' <small style="color:var(--muted)">(' + esc(s.title) + ')</small>' : '') + '</span></label></li>'; }));
     if (!rows.length) return '';
     const pw = (b.subs.some(s=>s.power) ? ' <span class="power">⚡ 전기</span>' : '') + (b.subs.some(s=>s.net) ? ' <span class="power" style="color:#2f6f8f">📶 와이파이</span>' : '');
     return '<article class="card"><div class="me-head"><h2 style="font-size:1.05rem">' + esc(b.name) + '</h2>' + pw + '</div><ul class="chk" style="margin-top:10px">' + rows.join('') + '</ul></article>';
   }).join('');
-  const common = COMMON_ITEMS.map((it,i) => { const k='common|'+i; total++; if (st[k]) done++; return '<li><label><input type="checkbox" data-k="'+k+'"'+(st[k]?' checked':'')+'><span>'+esc(it)+'</span></label></li>'; }).join('');
+  const common = only && !w.hq ? '' : COMMON_ITEMS.map((it,i) => { const k='common|'+i; total++; if (st[k]) done++; return '<li><label><input type="checkbox" data-k="'+k+'"'+(st[k]?' checked':'')+'><span>'+esc(it)+'</span></label></li>'; }).join('');
   $('v-items').innerHTML = '<div class="me-head" style="justify-content:space-between"><span class="prog">준비 완료 ' + done + ' / ' + total + '</span><button type="button" class="btn" id="resetItems">체크 모두 지우기</button></div>'
-    + '<p class="hint">체크 표시는 이 휴대폰에만 저장돼요.</p>'
-    + '<article class="card"><h2 style="font-size:1.05rem">공통</h2><ul class="chk" style="margin-top:10px">' + common + '</ul></article>' + blocks;
+    + '<p class="hint">' + (SHEET_API ? (SHEET_FAIL ? '⚠️ 시트에 연결하지 못했어요. 앱에 저장된 목록을 보여 줘요. 체크는 이 휴대폰에만 저장돼요.' : '시트에서 불러오는 중…') : '체크 표시는 이 휴대폰에만 저장돼요.') + '</p>'
+    + whoBar(w) + (common ? '<article class="card"><h2 style="font-size:1.05rem">공통</h2><ul class="chk" style="margin-top:10px">' + common + '</ul></article>' : '') + blocks;
 }
 document.addEventListener('change', e => {
-  if (!e.target.matches('#v-items input[type=checkbox]')) return;
+  if (!e.target.matches('#v-items input[data-k]')) return;
   const st = ls.get('gw-assign-items') || {}; st[e.target.dataset.k] = e.target.checked; ls.set('gw-assign-items', st); renderItems();
 });
 document.addEventListener('click', e => {
@@ -707,6 +746,41 @@ document.addEventListener('click', e => {
   $('q').value = n.dataset.n; show('me'); window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
+function renderSheetItems(){
+  const w = itemsWho(), only = w && w.me && !itemsAll;
+  const vis = SHEET.items.filter(x => x.status !== '필요 없음' && (!only || w.titles.has(x.sub) || (w.hq && x.booth === '공통') || (x.who && x.who.includes(w.me))));
+  const done = vis.filter(x => x.status === '준비 완료').length;
+  const groups = []; vis.forEach(x => { let g = groups.find(g => g.b === x.booth); if (!g) groups.push(g = { b: x.booth, list: [] }); g.list.push(x); });
+  const t = SHEET.when, hm = String(t.getHours()).padStart(2,'0') + ':' + String(t.getMinutes()).padStart(2,'0');
+  $('v-items').innerHTML = '<div class="me-head" style="justify-content:space-between"><span class="prog">준비 완료 ' + done + ' / ' + vis.length + '</span><button type="button" class="btn" id="reloadSheet">🔄 새로고침</button></div>'
+    + whoBar(w) + '<p class="hint">📡 구글 시트와 연결됨 · ' + hm + ' 기준. 체크하면 시트 [상태] 칸에 "준비 완료"로 저장되고, 모두에게 똑같이 보여요.' + (SHEET_FAIL ? ' <b style="color:var(--wine)">(지금은 연결이 끊겨 마지막으로 불러온 목록이에요)</b>' : '') + '</p>'
+    + groups.map(g => {
+        const bo = BOOTHS.find(b => b.name === g.b), subs = new Set(g.list.map(x => x.sub));
+        const pw = bo ? (bo.subs.some(s=>s.power) ? ' <span class="power">⚡ 전기</span>' : '') + (bo.subs.some(s=>s.net) ? ' <span class="power" style="color:#2f6f8f">📶 와이파이</span>' : '') : '';
+        return '<article class="card"><div class="me-head"><h2 style="font-size:1.05rem">' + esc(g.b) + '</h2>' + pw + '</div><ul class="chk" style="margin-top:10px">'
+          + g.list.map(x => '<li><label><input type="checkbox" data-row="' + x.row + '" data-name="' + esc(x.name) + '"' + (x.status === '준비 완료' ? ' checked' : '') + '><span>' + esc(itemLabel(x))
+            + (subs.size > 1 && x.sub !== g.b ? ' <small style="color:var(--muted)">(' + esc(x.sub) + ')</small>' : '')
+            + (x.who || x.memo ? '<small style="display:block;color:var(--muted)">' + esc([x.who && '담당 ' + x.who, x.memo].filter(Boolean).join(' · ')) + '</small>' : '') + '</span></label></li>').join('')
+          + '</ul></article>';
+      }).join('');
+}
+document.addEventListener('change', async e => {
+  const cb = e.target; if (!cb.matches('#v-items input[data-row]')) return;
+  const x = SHEET.items.find(i => i.row === +cb.dataset.row && i.name === cb.dataset.name); if (!x) return;
+  const before = x.status; x.status = cb.checked ? '준비 완료' : ''; cb.disabled = true; renderSheetItems();
+  try {
+    const r = await fetch(SHEET_API + '?action=set&row=' + x.row + '&name=' + encodeURIComponent(x.name) + '&done=' + (cb.checked ? 1 : 0));
+    const d = await r.json(); if (!d.ok) throw new Error(d.error);
+  } catch (err) {
+    x.status = before; renderSheetItems();
+    alert(String(err.message) === 'moved' ? '시트의 물품 순서가 바뀌었어요. 목록을 새로 불러올게요.' : '시트에 저장하지 못했어요. 인터넷 연결을 확인해 주세요.');
+  }
+  loadSheet(true);
+});
+document.addEventListener('click', e => { if (e.target.id === 'reloadSheet') { e.target.textContent = '불러오는 중…'; loadSheet(true); } });
+loadSheet(true);
+setInterval(() => { if (cur === 'items' && !document.hidden) loadSheet(true); }, 30000);
+
 // ===== 탭 =====
 let cur = 'me';
 const R = { home:renderHome, me:renderMe, map:renderMap, all:renderAll, items:renderItems };
@@ -717,7 +791,8 @@ function show(v){
   R[v]();
 }
 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => show(t.dataset.v)));
-$('q').addEventListener('input', () => { if (cur !== 'me' && cur !== 'map') show('me'); else R[cur](); });
+$('q').addEventListener('input', () => { if (cur !== 'me' && cur !== 'map' && cur !== 'items') show('me'); else R[cur](); });
+document.addEventListener('click', e => { if (e.target.id === 'itemsAll') { itemsAll = !itemsAll; renderItems(); } });
 show('home');
 // ===== 행사 날 날씨 (Open-Meteo, 무료 · 인증키 없음) =====
 (function(){
